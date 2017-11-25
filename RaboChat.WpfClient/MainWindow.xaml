@@ -1,0 +1,56 @@
+﻿<Window x:Class="RaboChat.WpfClient.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:RaboChat.WpfClient"
+        mc:Ignorable="d"
+        Height="350" Width="525" Title="{Binding Title}">
+    <Grid>
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition />
+                <RowDefinition  Height="Auto"/>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <TextBox Grid.Row="0" Grid.ColumnSpan="2" Text="{Binding ChatRoom}" IsReadOnly="True" />
+
+            <RichTextBox Grid.Row="0" Grid.ColumnSpan="2"  
+                         IsReadOnly="True" 
+                         local:RichTextBoxHelper.FlowDocument="{Binding Lines}"
+                         ScrollViewer.VerticalScrollBarVisibility="Visible">
+                <RichTextBox.Resources>
+                    <Style TargetType="{x:Type Paragraph}">
+                        <Setter Property="Block.Margin" Value="0" />
+                    </Style>
+                </RichTextBox.Resources>
+            </RichTextBox>
+
+            <TextBox Grid.Row="1" AcceptsReturn="True"
+                     Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" >
+                <TextBox.InputBindings>
+                    <KeyBinding Command="{Binding SendCommand}" Key="Return" />
+                </TextBox.InputBindings>
+            </TextBox>
+            <Button Grid.Row="1" Grid.Column="1" Command="{Binding SendCommand}">Send</Button>
+        </Grid>
+        <!--Visibility="Collapsed"-->
+        <Grid Background="White" 
+              Visibility="{Binding IsLoggedIn, Converter={StaticResource visibilityConverter}, ConverterParameter=True}"
+              >
+            <StackPanel Width="200" VerticalAlignment="Center">
+                <TextBlock>Type your name:</TextBlock>
+                <TextBox Text="{Binding UserName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                    <TextBox.InputBindings>
+                        <KeyBinding Command="{Binding LoginCommand}" Key="Return" />
+                    </TextBox.InputBindings>
+                </TextBox>
+                <Button Command="{Binding LoginCommand}">Login</Button>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>
