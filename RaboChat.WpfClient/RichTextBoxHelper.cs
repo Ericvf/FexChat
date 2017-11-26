@@ -1,9 +1,13 @@
-﻿using System.Collections.ObjectModel;
+﻿using System;
+using System.Collections.ObjectModel;
 using System.Collections.Specialized;
+using System.Diagnostics;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Media.Imaging;
 
 namespace RaboChat.WpfClient
 {
@@ -78,9 +82,13 @@ namespace RaboChat.WpfClient
                            newItemsLines.AppendLine(item.ToString());
                        }
 
+                       var message = newItemsLines.ToString().Trim();
+
                        richTextBox.Dispatcher.Invoke(() =>
                        {
-                           var p = new Paragraph(new Run(newItemsLines.ToString().Trim()));
+                           var p = new Paragraph();
+                           CreateParagraph(message, p);
+
                            flowDocument.Blocks.Add(p);
                            richTextBox.ScrollToEnd();
                        });
@@ -104,6 +112,41 @@ namespace RaboChat.WpfClient
             {
                 var coll = (INotifyCollectionChanged)e.NewValue;
                 coll.CollectionChanged += action;
+            }
+        }
+
+        private static void CreateParagraph(string message, Paragraph p)
+        {
+            var splitCharacters = new[] { ' ' };
+            var words = Regex.Matches(message, @"((\s+)?\S+(\s+)?)");
+            foreach (Match m in words)
+            {
+                var item = m.Value.ToString().Trim();
+
+                if (item.StartsWith("http://") || item.StartsWith("https://"))
+                {
+                    var uriSource = new Uri(item, UriKind.Absolute);
+                    var img = new InlineUIContainer(new Image()
+                    {
+                        Source = new BitmapImage(uriSource),
+                        Stretch = System.Windows.Media.Stretch.None
+                    });
+
+                    var hyperlink = new Hyperlink();
+                    hyperlink.IsEnabled = true;
+                    hyperlink.Inlines.Add(Environment.NewLine);
+                    hyperlink.Inlines.Add(img);
+                    //hyperlink.Inlines.Add(m.Value);  
+                    hyperlink.NavigateUri = new Uri(item);
+                    hyperlink.RequestNavigate += (sender, args) => Process.Start(args.Uri.ToString());
+
+
+                    p.Inlines.Add(hyperlink);
+                }
+                else
+                {
+                    p.Inlines.Add(m.Value);
+                }
             }
         }
     }

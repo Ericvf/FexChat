@@ -2,6 +2,7 @@
 using System.ComponentModel.Composition;
 using System.Threading.Tasks;
 using System.Windows.Input;
+using AnimationExtensions;
 using RaboChat.Common;
 
 namespace RaboChat.WpfClient
@@ -27,8 +28,13 @@ namespace RaboChat.WpfClient
             await ChatClient.Start(UserName);
 
             Title += $" ({UserName})";
+
+            await MyAnim.PlayAsync();
+
             IsLoggedIn = true;
         }
+
+        public Animation MyAnim { get; set; }
 
         private void ChatClient_ChatMessage(object sender, ChatClient.ChatMessageEventArgs e)
         {
@@ -53,7 +59,6 @@ namespace RaboChat.WpfClient
                 return _SendCommand;
             }
         }
-
 
         private ICommand _loginCommand;
 

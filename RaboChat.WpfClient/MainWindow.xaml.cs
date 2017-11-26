@@ -1,6 +1,8 @@
-﻿using RaboChat.Common;
-using System.ComponentModel.Composition;
+﻿using System.ComponentModel.Composition;
+using System.Linq;
 using System.Windows;
+using AnimationExtensions;
+using RaboChat.Common;
 
 namespace RaboChat.WpfClient
 {
@@ -21,6 +23,14 @@ namespace RaboChat.WpfClient
             CompositionHelpers.InitializeComposition(assemblyTypes, this);
 
             DataContext = MainViewModel;
+
+            var elements = LoginBox.Children.Cast<FrameworkElement>();
+            MainViewModel.MyAnim = 
+                elements.For((i, e) => e
+                  .Wait(i * 100)
+                  .Move(y: 50, duration: 750, eq: Eq.InBack)
+                  .Fade(0, duration: 750)
+              );
         }
     }
 }

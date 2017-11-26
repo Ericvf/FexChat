@@ -18,30 +18,36 @@ namespace RaboChat.Common
 
         readonly ClientModel clientModel = new ClientModel();
 
-        public ChatClient()
-        {
-            clientModel.TcpClient = new TcpClient();
-        }
-
         public async Task Start(string clientName)
         {
+            clientModel.TcpClient = new TcpClient();
+            clientModel.Name = clientName;
+
             await clientModel.TcpClient.ConnectAsync("localhost", 3000);
 
             await WriteMessage(clientName);
 
-            Task.Run(() => ConsumeServer(clientModel.TcpClient));
+            Task.Run(() => ConsumeServer(clientModel));
         }
 
-        private async Task ConsumeServer(TcpClient client)
+        private async Task ConsumeServer(ClientModel client)
         {
-            var networkStream = client.GetStream();
+            var networkStream = client.TcpClient.GetStream();
             var reader = new StreamReader(networkStream);
 
-            while (true)
+            try
             {
-                string bas64message = await reader.ReadLineAsync();
-                var message = Base64Helper.Base64Decode(bas64message);
-                RaiseMessage(message);
+                while (true)
+                {
+                    string bas64message = await reader.ReadLineAsync();
+                    var message = Base64Helper.Base64Decode(bas64message);
+                    RaiseMessage(message);
+                }
+            }
+            finally
+            {
+                client.TcpClient.Close();
+                client.TcpClient = null;
             }
         }
 
@@ -58,10 +64,19 @@ namespace RaboChat.Common
             if (string.IsNullOrEmpty(message))
                 return;
 
-            if (!clientModel.TcpClient.Connected)
+            if (clientModel.TcpClient == null)
             {
-                Close();
-                return;
+                try
+                {
+                    await Start(clientModel.Name);
+                }
+                catch
+                {
+                    RaiseMessage("Not connected.");
+                    clientModel.TcpClient.Close();
+                    clientModel.TcpClient = null;
+                    return;
+                }
             }
 
             var networkStream = clientModel.TcpClient.GetStream();
@@ -71,12 +86,6 @@ namespace RaboChat.Common
 
             var base64message = Base64Helper.Base64Encode(message);
             await writer.WriteLineAsync(base64message);
-        }
-
-        public void Close()
-        {
-            RaiseMessage("Not connected.");
-            clientModel.TcpClient.Close();
         }
     }
 }

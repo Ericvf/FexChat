@@ -17,39 +17,51 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <TextBox Grid.Row="0" Grid.ColumnSpan="2" Text="{Binding ChatRoom}" IsReadOnly="True" />
-
             <RichTextBox Grid.Row="0" Grid.ColumnSpan="2"  
-                         IsReadOnly="True" 
+                         IsReadOnly="True" IsDocumentEnabled="True" 
                          local:RichTextBoxHelper.FlowDocument="{Binding Lines}"
                          ScrollViewer.VerticalScrollBarVisibility="Visible">
                 <RichTextBox.Resources>
+                    <!--<Style TargetType="{x:Type FlowDocument}">
+                        <Setter Property="PagePadding" Value="0,5,5,0"/>
+                    </Style>-->    
                     <Style TargetType="{x:Type Paragraph}">
                         <Setter Property="Block.Margin" Value="0" />
+                        <Setter Property="Padding" Value="0"/>
+                        <Setter Property="BorderThickness" Value="1"/>
+                        <Setter Property="BorderBrush" Value="DarkGray"/>
                     </Style>
                 </RichTextBox.Resources>
+                <RichTextBox.Document>
+                    <!--<FlowDocument/>-->
+                    <FlowDocument>
+                        <Paragraph><Run>erdfgdfg</Run></Paragraph>
+                        <Paragraph><Run>erdfgdfg</Run></Paragraph>
+                        <Paragraph><Run>erdfgdfg</Run></Paragraph>
+                    </FlowDocument>
+                </RichTextBox.Document>
             </RichTextBox>
 
-            <TextBox Grid.Row="1" AcceptsReturn="True"
-                     Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" >
+            <TextBox Text="{Binding Text, UpdateSourceTrigger=PropertyChanged}" 
+                     Grid.Row="1" AcceptsReturn="True" AcceptsTab="True">
                 <TextBox.InputBindings>
                     <KeyBinding Command="{Binding SendCommand}" Key="Return" />
                 </TextBox.InputBindings>
             </TextBox>
+            
             <Button Grid.Row="1" Grid.Column="1" Command="{Binding SendCommand}">Send</Button>
         </Grid>
-        <!--Visibility="Collapsed"-->
-        <Grid Background="White" 
-              Visibility="{Binding IsLoggedIn, Converter={StaticResource visibilityConverter}, ConverterParameter=True}"
-              >
-            <StackPanel Width="200" VerticalAlignment="Center">
+        
+        <Grid Visibility="{Binding IsLoggedIn, Converter={StaticResource visibilityConverter}, ConverterParameter=True}"
+              Background="White">
+            <StackPanel Width="200" VerticalAlignment="Center" Name="LoginBox">
                 <TextBlock>Type your name:</TextBlock>
                 <TextBox Text="{Binding UserName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
                     <TextBox.InputBindings>
-                        <KeyBinding Command="{Binding LoginCommand}" Key="Return" />
+                        <KeyBinding Command="{Binding LoginCommand}" CommandParameter="{Binding ElementName=LoginBox}" Key="Return" />
                     </TextBox.InputBindings>
                 </TextBox>
-                <Button Command="{Binding LoginCommand}">Login</Button>
+                <Button Command="{Binding LoginCommand}" CommandParameter="{Binding ElementName=LoginBox}">Login</Button>
             </StackPanel>
         </Grid>
     </Grid>
