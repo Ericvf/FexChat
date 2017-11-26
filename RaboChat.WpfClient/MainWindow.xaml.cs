@@ -41,7 +41,6 @@ namespace RaboChat.WpfClient
                 {
                     var windowHandle = new WindowInteropHelper(this).Handle;
                     FlashWindow.Flash(windowHandle, 5);
-                    SystemSounds.Asterisk.Play();
                 }
             });
         }
