@@ -30,7 +30,7 @@ namespace RaboChat.Client
             while (true)
             {
                 var message = Console.ReadLine();
-                await TcpClient.WriteMessage(message);
+                await TcpClient.WriteText(message);
             }
         }
     }

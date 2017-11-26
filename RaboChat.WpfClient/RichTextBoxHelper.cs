@@ -1,13 +1,17 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Diagnostics;
+using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using RaboChat.Common;
 
 namespace RaboChat.WpfClient
 {
@@ -16,43 +20,12 @@ namespace RaboChat.WpfClient
     /// </summary>
     public class RichTextBoxHelper : DependencyObject
     {
-        //public static string GetDocumentXaml(DependencyObject obj)
-        //{
-        //    return (string)obj.GetValue(DocumentXamlProperty);
-        //}
-
-        //public static void SetDocumentXaml(DependencyObject obj, string value)
-        //{
-        //    obj.SetValue(DocumentXamlProperty, value);
-        //}
-
-        //public static readonly DependencyProperty DocumentXamlProperty =
-        //  DependencyProperty.RegisterAttached(
-        //    "DocumentXaml",
-        //    typeof(string),
-        //    typeof(RichTextBoxHelper),
-        //    new FrameworkPropertyMetadata
-        //    {
-        //        PropertyChangedCallback = (obj, e) =>
-        //        {
-        //            var richTextBox = (RichTextBox)obj;
-
-        //            var xaml = GetDocumentXaml(richTextBox);
-        //            var doc = richTextBox.Document ?? new FlowDocument();
-
-        //            var range = new TextRange(doc.ContentStart, doc.ContentEnd);
-        //            range.Load(new MemoryStream(Encoding.UTF8.GetBytes(xaml)), DataFormats.Text);
-
-        //            richTextBox.Document = doc;
-        //        }
-        //    });
-
-        public static ObservableCollection<string> GetFlowDocument(DependencyObject obj)
+        public static ObservableCollection<MessageModel> GetFlowDocument(DependencyObject obj)
         {
-            return (ObservableCollection<string>)obj.GetValue(FlowDocumentProperty);
+            return (ObservableCollection<MessageModel>)obj.GetValue(FlowDocumentProperty);
         }
 
-        public static void SetFlowDocument(DependencyObject obj, ObservableCollection<string> value)
+        public static void SetFlowDocument(DependencyObject obj, ObservableCollection<MessageModel> value)
         {
             obj.SetValue(FlowDocumentProperty, value);
         }
@@ -60,7 +33,7 @@ namespace RaboChat.WpfClient
         public static readonly DependencyProperty FlowDocumentProperty =
               DependencyProperty.RegisterAttached(
                 "FlowDocument",
-                typeof(ObservableCollection<string>),
+                typeof(ObservableCollection<MessageModel>),
                 typeof(RichTextBoxHelper),
                 new UIPropertyMetadata(null, OnFlowDocumentChanged)
         );
@@ -77,28 +50,17 @@ namespace RaboChat.WpfClient
                        var flowDocument = richTextBox.Document;
 
                        var newItemsLines = new StringBuilder();
-                       foreach (var item in args.NewItems)
-                       {
-                           newItemsLines.AppendLine(item.ToString());
-                       }
-
-                       var message = newItemsLines.ToString().Trim();
-
                        richTextBox.Dispatcher.Invoke(() =>
                        {
-                           var p = new Paragraph();
-                           CreateParagraph(message, p);
+                           foreach (MessageModel item in args.NewItems)
+                           {
+                               var p = new Paragraph();
+                               CreateParagraph(item, p);
 
-                           flowDocument.Blocks.Add(p);
-                           richTextBox.ScrollToEnd();
+                               flowDocument.Blocks.Add(p);
+                               richTextBox.ScrollToEnd();
+                           }
                        });
-
-                       //var textRange = new TextRange(flowDocument.ContentEnd, flowDocument.ContentEnd);
-                       //richTextBox.Dispatcher.Invoke(() =>
-                       //{
-                       //    textRange.Text = newItemsLines.ToString();
-                       //    //textRange.Load(new MemoryStream(Encoding.UTF8.GetBytes(newItemsLines.ToString())), DataFormats.Text);
-                       //});
                    }
                });
 
@@ -115,32 +77,62 @@ namespace RaboChat.WpfClient
             }
         }
 
-        private static void CreateParagraph(string message, Paragraph p)
+        private static void CreateParagraph(MessageModel message, Paragraph p)
         {
+            if (message.Type == Types.Announcement)
+            {
+                p.FontStyle = FontStyles.Italic;
+                p.Foreground = Brushes.DarkGray;
+                p.TextAlignment = TextAlignment.Center;
+            }
+            else 
+            {
+                var userNameRun = new Run($"{message.UserName} ({DateTime.Now.ToShortTimeString()}):{Environment.NewLine}");
+                userNameRun.FontStyle = FontStyles.Italic;
+                userNameRun.Foreground = Brushes.Gray;
+                p.Inlines.Add(userNameRun);
+            }
+
+            if (message.Type == Types.Image)
+            {
+                var bytes = Convert.FromBase64String(message.Payload);
+                var ms = new MemoryStream(bytes);
+                var bitmapImage = new BitmapImage();
+                bitmapImage.BeginInit();
+                bitmapImage.StreamSource = ms;
+                bitmapImage.EndInit();
+
+                var img = new Image()
+                {
+                    Source = bitmapImage as ImageSource,
+                    Stretch = Stretch.None
+                };
+
+                var viewBox = new Viewbox()
+                {
+                    Stretch = Stretch.UniformToFill,
+                    StretchDirection = StretchDirection.DownOnly,
+                    Child = img
+                };
+
+                p.Inlines.Add(viewBox);
+                return;
+            }
+
             var splitCharacters = new[] { ' ' };
-            var words = Regex.Matches(message, @"((\s+)?\S+(\s+)?)");
+            var words = Regex.Matches(message.Payload, @"((\s+)?\S+(\s+)?)");
+
             foreach (Match m in words)
             {
                 var item = m.Value.ToString().Trim();
 
                 if (item.StartsWith("http://") || item.StartsWith("https://"))
                 {
-                    var uriSource = new Uri(item, UriKind.Absolute);
-                    var img = new InlineUIContainer(new Image()
-                    {
-                        Source = new BitmapImage(uriSource),
-                        Stretch = System.Windows.Media.Stretch.None
-                    });
-
                     var hyperlink = new Hyperlink();
                     hyperlink.IsEnabled = true;
-                    hyperlink.Inlines.Add(Environment.NewLine);
-                    hyperlink.Inlines.Add(img);
-                    //hyperlink.Inlines.Add(m.Value);  
+                    hyperlink.Inlines.Add(m.Value);
                     hyperlink.NavigateUri = new Uri(item);
                     hyperlink.RequestNavigate += (sender, args) => Process.Start(args.Uri.ToString());
-
-
                     p.Inlines.Add(hyperlink);
                 }
                 else

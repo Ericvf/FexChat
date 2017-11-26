@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel.Composition;
-using System.Linq;
+using System.Media;
 using System.Windows;
+using System.Windows.Interop;
 using AnimationExtensions;
 using RaboChat.Common;
 
@@ -24,13 +25,37 @@ namespace RaboChat.WpfClient
 
             DataContext = MainViewModel;
 
-            var elements = LoginBox.Children.Cast<FrameworkElement>();
-            MainViewModel.MyAnim = 
-                elements.For((i, e) => e
-                  .Wait(i * 100)
-                  .Move(y: 50, duration: 750, eq: Eq.InBack)
-                  .Fade(0, duration: 750)
-              );
+            MainViewModel.LoginAnimation = LoginBox
+                .Move(y: 100, duration: 750, eq: Eq.InBack)
+                .Fade(0, duration: 750)
+                .ThenDo((e) => LoginBox.Visibility = Visibility.Collapsed)
+                .New();
+
+            MainViewModel.ChatClient.ChatMessage += ChatClient_ChatMessage;
+        }
+
+        private void ChatClient_ChatMessage(object sender, ChatClient.ChatMessageEventArgs e)
+        {
+            Dispatcher.Invoke(() => {
+                if (WindowState == WindowState.Minimized)
+                {
+                    var windowHandle = new WindowInteropHelper(this).Handle;
+                    FlashWindow.Flash(windowHandle, 5);
+                    SystemSounds.Asterisk.Play();
+                }
+            });
+        }
+
+        private async void TextBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key == System.Windows.Input.Key.V && e.KeyboardDevice.Modifiers == System.Windows.Input.ModifierKeys.Control)
+            {
+                if (MainViewModel.CanPaste())
+                {
+                    var hasPasted = await MainViewModel.Paste();
+                    e.Handled = hasPasted;
+                }
+            }
         }
     }
 }

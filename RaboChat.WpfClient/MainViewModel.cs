@@ -1,6 +1,13 @@
-﻿using System.Collections.ObjectModel;
+﻿using System;
+using System.Collections.ObjectModel;
 using System.ComponentModel.Composition;
+using System.Drawing;
+using System.Drawing.Imaging;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 using System.Windows.Input;
 using AnimationExtensions;
 using RaboChat.Common;
@@ -10,31 +17,96 @@ namespace RaboChat.WpfClient
     [Export]
     public class MainViewModel : ViewModelBase
     {
+        static readonly string[] extensions = new[] { "bmp", "png", "jpg", "gif" };
+        static HttpClient httpClient = new HttpClient();
+
         [Import]
         public ChatClient ChatClient { get; set; }
 
         private async Task Send()
         {
-            var message = Text;
+            await ChatClient.WriteText(Text);
             Text = string.Empty;
-
-            await ChatClient.WriteMessage(message);
         }
 
         private async Task Login()
         {
             ChatClient.ChatMessage += ChatClient_ChatMessage;
 
-            await ChatClient.Start(UserName);
+            await ChatClient.Start(Alias ?? UserName);
 
             Title += $" ({UserName})";
 
-            await MyAnim.PlayAsync();
+            await LoginAnimation.PlayAsync();
 
             IsLoggedIn = true;
         }
 
-        public Animation MyAnim { get; set; }
+        public async Task<bool> Paste()
+        {
+            var clipboardData = Clipboard.GetDataObject();
+            if (clipboardData != null)
+            {
+                if (clipboardData.GetDataPresent(DataFormats.Bitmap))
+                {
+                    var image = (Image)clipboardData.GetData(DataFormats.Bitmap, true);
+                    using (var ms = new MemoryStream())
+                    {
+                        image.Save(ms, ImageFormat.Png);
+                        await ChatClient.WriteImage(ms.ToArray());
+                        return true;
+                    }
+                }
+                else if (clipboardData.GetDataPresent(DataFormats.FileDrop))
+                {
+                    var files = (string[])clipboardData.GetData(DataFormats.FileDrop);
+                    var imageFiles = files.Where(f => extensions.Any(e => f.ToLower().EndsWith(e)));
+                    foreach (var imageFile in imageFiles)
+                    {
+                        var imageBytes = File.ReadAllBytes(imageFile);
+                        await ChatClient.WriteImage(imageBytes);
+                        return true;
+                    }
+                }
+                //else if (clipboardData.GetDataPresent(DataFormats.StringFormat))
+                //{
+                //    var clipboardText = (string)clipboardData.GetData(DataFormats.StringFormat);
+                //    try
+                //    {
+                //        var result = await httpClient.GetAsync(clipboardText);
+                //        result.EnsureSuccessStatusCode();
+
+                //        if (result.Content.Headers.ContentType.MediaType.Contains("image"))
+                //        {
+                //            var contentBytes = await result.Content.ReadAsByteArrayAsync();
+                //            await ChatClient.WriteImage(contentBytes);
+                //            return true;
+                //        }
+                //    }
+                //    catch
+                //    {
+
+                //    }
+                //}
+            }
+
+            return false;
+        }
+
+        public bool CanPaste()
+        {
+            var clipboardData = Clipboard.GetDataObject();
+            if (clipboardData != null)
+            {
+                return clipboardData.GetDataPresent(DataFormats.Bitmap)
+                    || clipboardData.GetDataPresent(DataFormats.FileDrop)
+                    || clipboardData.GetDataPresent(DataFormats.StringFormat);
+            }
+
+            return false;
+        }
+
+        public Animation LoginAnimation { get; set; }
 
         private void ChatClient_ChatMessage(object sender, ChatClient.ChatMessageEventArgs e)
         {
@@ -77,6 +149,25 @@ namespace RaboChat.WpfClient
             }
         }
 
+        private ICommand _PasteCommand;
+
+        public ICommand PasteCommand
+        {
+            get
+            {
+                if (_PasteCommand == null)
+                {
+                    _PasteCommand = new RelayCommand(
+                        async param => await Paste(),
+                        p => CanPaste()
+                         
+                    );
+                }
+
+                return _PasteCommand;
+            }
+        }
+
         #endregion
 
         #region Properties
@@ -96,7 +187,7 @@ namespace RaboChat.WpfClient
         private string _Title = "RaboChat";
         public const string TitlePropertyName = "Title";
 
-        public ObservableCollection<string> Lines
+        public ObservableCollection<MessageModel> Lines
         {
             get { return _Lines; }
             set
@@ -108,7 +199,7 @@ namespace RaboChat.WpfClient
                 }
             }
         }
-        private ObservableCollection<string> _Lines = new ObservableCollection<string>();
+        private ObservableCollection<MessageModel> _Lines = new ObservableCollection<MessageModel>();
         public const string LinesPropertyName = "Lines";
 
         public string Text
@@ -153,8 +244,38 @@ namespace RaboChat.WpfClient
                 }
             }
         }
-        private string _UserName;
+        private string _UserName = Environment.UserName;
         public const string UserNamePropertyName = "UserName";
+
+        public string Alias
+        {
+            get { return _Alias; }
+            set
+            {
+                if (_Alias != value)
+                {
+                    _Alias = value;
+                    OnPropertyChanged(AliasPropertyName);
+                }
+            }
+        }
+        private string _Alias;
+        public const string AliasPropertyName = "Alias";
+
+        public System.Windows.Window Window
+        {
+            get { return _Window; }
+            set
+            {
+                if (_Window != value)
+                {
+                    _Window = value;
+                    OnPropertyChanged(WindowPropertyName);
+                }
+            }
+        }
+        private System.Windows.Window _Window;
+        public const string WindowPropertyName = "Window";
 
         #endregion
     }

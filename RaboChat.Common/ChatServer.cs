@@ -1,19 +1,28 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.ComponentModel.Composition;
+using System.Configuration;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
+using static RaboChat.Common.ChatClient;
 
 namespace RaboChat.Common
 {
     [Export]
     public class ChatServer
     {
-        readonly TcpListener tcpListener = new TcpListener(IPAddress.Any, 3000);
+        readonly TcpListener tcpListener;
 
         readonly ConcurrentDictionary<string, ClientModel> clients = new ConcurrentDictionary<string, ClientModel>();
+
+        public ChatServer()
+        {
+            var port = ConfigurationManager.AppSettings["port"] ?? throw new ArgumentNullException("port");
+            tcpListener = new TcpListener(IPAddress.Any, Convert.ToInt32(port));
+        }
 
         public void Start()
         {
@@ -47,17 +56,14 @@ namespace RaboChat.Common
             var clientName = await reader.ReadLineAsync();
             clientModel.Name = clientName = Base64Helper.Base64Decode(clientName);
 
-            BroadcastClients(clientModel, $"{clientName} entered the chat.");
+            BroadcastAnnouncement(clientModel, $"{clientName} entered the chat");
 
             while (true)
             {
                 try
                 {
                     var base64message = await reader.ReadLineAsync();
-                    var message = Base64Helper.Base64Decode(base64message);
-
-                    message = $"{clientModel.Name}: {message}";
-                    BroadcastClients(clientModel, message);
+                    BroadcastClients(clientModel, base64message);
                 }
                 catch
                 {
@@ -67,14 +73,20 @@ namespace RaboChat.Common
 
             clients.TryRemove(clientModel.IP, out clientModel);
 
-            BroadcastClients(clientModel, $"{clientModel.Name} left the chat.");
+            BroadcastAnnouncement(clientModel, $"{clientName} left the chat");
+        }
+
+        private void BroadcastAnnouncement(ClientModel clientModel, string announcement)
+        {
+            Console.WriteLine(announcement);
+            var messageModel = new MessageModel(Types.Announcement, announcement);
+            var message = JsonConvert.SerializeObject(messageModel);
+            var base64message = Base64Helper.Base64Encode(message);
+            BroadcastClients(clientModel, base64message);
         }
 
         private void BroadcastClients(ClientModel clientModel, string message)
         {
-            Console.WriteLine(message);
-
-            var base64message = Base64Helper.Base64Encode(message);
             foreach (var client in clients)
             {
                 var networkStream = client.Value.TcpClient.GetStream();
@@ -83,7 +95,7 @@ namespace RaboChat.Common
                     AutoFlush = true
                 };
 
-                writer.WriteLineAsync(base64message);
+                writer.WriteLineAsync(message);
             }
         }
     }

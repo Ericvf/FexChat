@@ -1,8 +1,10 @@
 ﻿using System;
 using System.ComponentModel.Composition;
+using System.Configuration;
 using System.IO;
 using System.Net.Sockets;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 
 namespace RaboChat.Common
 {
@@ -11,7 +13,7 @@ namespace RaboChat.Common
     {
         public class ChatMessageEventArgs : EventArgs
         {
-            public string Message { get; set; }
+            public MessageModel Message { get; set; }
         }
 
         public event EventHandler<ChatMessageEventArgs> ChatMessage;
@@ -23,7 +25,10 @@ namespace RaboChat.Common
             clientModel.TcpClient = new TcpClient();
             clientModel.Name = clientName;
 
-            await clientModel.TcpClient.ConnectAsync("localhost", 3000);
+            var hostname = ConfigurationManager.AppSettings["hostname"] ?? throw new ArgumentNullException("hostname");
+            var port = ConfigurationManager.AppSettings["port"] ?? throw new ArgumentNullException("port");
+
+            await clientModel.TcpClient.ConnectAsync(hostname, Convert.ToInt32(port));
 
             await WriteMessage(clientName);
 
@@ -41,7 +46,9 @@ namespace RaboChat.Common
                 {
                     string bas64message = await reader.ReadLineAsync();
                     var message = Base64Helper.Base64Decode(bas64message);
-                    RaiseMessage(message);
+
+                    var messageModel = JsonConvert.DeserializeObject<MessageModel>(message);
+                    RaiseMessage(messageModel);
                 }
             }
             finally
@@ -51,7 +58,7 @@ namespace RaboChat.Common
             }
         }
 
-        private void RaiseMessage(string message)
+        private void RaiseMessage(MessageModel message)
         {
             ChatMessage?.Invoke(this, new ChatMessageEventArgs()
             {
@@ -59,7 +66,25 @@ namespace RaboChat.Common
             });
         }
 
-        public async Task WriteMessage(string message)
+        public async Task WriteText(string message, Types type = Types.Text)
+        {
+            if (string.IsNullOrEmpty(message))
+                return;
+
+            var messageModel = new MessageModel(type, message, clientModel.Name);
+            var payload = JsonConvert.SerializeObject(messageModel);
+            await WriteMessage(payload);
+        }
+
+        public async Task WriteImage(byte[] bytes)
+        {
+            var base64image = Convert.ToBase64String(bytes);
+            var messageModel = new MessageModel(Types.Image, base64image, clientModel.Name);
+            var payload = JsonConvert.SerializeObject(messageModel);
+            await WriteMessage(payload);
+        }
+
+        private async Task WriteMessage(string message)
         {
             if (string.IsNullOrEmpty(message))
                 return;
@@ -72,7 +97,8 @@ namespace RaboChat.Common
                 }
                 catch
                 {
-                    RaiseMessage("Not connected.");
+                    var messageModel = new MessageModel(Types.Announcement, "Not connected");
+                    RaiseMessage(messageModel);
                     clientModel.TcpClient.Close();
                     clientModel.TcpClient = null;
                     return;
